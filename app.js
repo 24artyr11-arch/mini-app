@@ -814,7 +814,11 @@
       state.signal = await api(`/api/signal/${encodeURIComponent(state.market.id)}/${encodeURIComponent(instrumentId)}`);
       renderSignal();
     } catch (error) {
-      renderScreenError(error.message, renderInstruments);
+      if (error.status === 409) {
+        renderMarketClosed(renderInstruments);
+      } else {
+        renderScreenError(error.message, renderInstruments);
+      }
     } finally {
       state.busy = false;
     }
@@ -886,6 +890,7 @@
       haptic();
     } catch (error) {
       if (error.status === 403) return bootstrap();
+      if (error.status === 409) return renderMarketClosed(renderInstruments);
       showActionNotice(error.message, true);
     } finally {
       state.busy = false;
@@ -903,6 +908,7 @@
       renderSignal();
     } catch (error) {
       if (error.status === 403) return bootstrap();
+      if (error.status === 409) return renderMarketClosed(renderInstruments);
       showActionNotice(error.message, true);
     } finally {
       state.busy = false;
@@ -1114,6 +1120,21 @@
     }
   }
 
+  function renderMarketClosed(backFn) {
+    clearPaymentTimer();
+    state.screen = "market-closed";
+    showBack(true);
+    setNavActive("markets");
+    main.innerHTML = `
+      <section class="center-state">
+        <div class="lock-icon">⌛</div>
+        <h1>Market is closed</h1>
+        <p>Signals are unavailable while this market is closed. Please try again when trading resumes.</p>
+        <button type="button" id="marketClosedBackBtn" class="retry-btn">Go Back</button>
+      </section>`;
+    document.getElementById("marketClosedBackBtn").addEventListener("click", backFn);
+  }
+
   function renderScreenError(message, backFn) {
     clearPaymentTimer();
     showBack(true);
@@ -1129,7 +1150,9 @@
 
   function goBack() {
     clearPaymentTimer();
-    if (state.screen === "signal") return renderInstruments();
+    if (state.screen === "signal" || state.screen === "market-closed") {
+      return renderInstruments();
+    }
     if (state.screen === "instruments") return renderMarkets();
     if (state.screen === "receipt-upload") return renderPaymentDetails();
     if (state.screen === "payment-details") return renderPaymentMethods();
